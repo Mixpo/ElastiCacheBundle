@@ -1,0 +1,7 @@
+parameters:
+    igniter.elasticache.redis_class: "Redis"
+    igniter.elasticache.rediscache.class: "Igniter\ElastiCacheBundle\Cache\RedisCache"
+
+services:
+    igniter.elasticache.rediscache:
+        class: "%igniter.elasticache.rediscache.class%"
