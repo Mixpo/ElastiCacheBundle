@@ -3,6 +3,7 @@
 namespace Igniter\ElastiCacheBundle\Tests\DependencyInjection;
 
 use Igniter\ElastiCacheBundle\DependencyInjection\Compiler\RedisCompiler;
+use Symfony\Component\DependencyInjection\Definition;
 
 class RedisCompilerTest extends \PHPUnit_Framework_TestCase
 {
@@ -20,18 +21,11 @@ class RedisCompilerTest extends \PHPUnit_Framework_TestCase
         $this->paramterBagMock = $this->getMock('Symfony\Component\DependencyInjection\ParameterBag\ParameterBag');
     }
 
-    protected function tearDown()
-    {
-        unset($this->containerMock);
-        unset($this->definitionMock);
-        unset($this->paramterBagMock);
-    }
-
     public function testProcess()
     {
         $servers = [
-            ['host'=>'127.0.0.1', 'port'=>6379],
-            ['host'=>'localhost', 'port'=>6380, 'master'=>true],
+            ['host'=>'127.0.0.1', 'port'=>1234, 'timeout'=>1],
+            ['host'=>'localhost', 'port'=>12345, 'master'=>true],
         ];
 
         $this->containerMock->expects($this->at(0))
@@ -62,36 +56,12 @@ class RedisCompilerTest extends \PHPUnit_Framework_TestCase
             ->method('resolveValue')
             ->will($this->returnValue($servers));
         // setMaster and addSlave calls
-        $this->definitionMock->expects($this->at(0))
+        $this->definitionMock->expects($this->exactly(2))
             ->method('addMethodCall')
-            ->with('addSlave', $this->callback(function ($subject) {
-                // verify the subject is an array of 1 Defintion class
-                if (count($subject) <> 1 && !is_a($subject[0], 'Symfony\Component\DependencyInjection\Definition')) {
-                    return false;
-                }
-                /** @var $definition \Symfony\Component\DependencyInjection\Definition */
-                $definition = $subject[0];
-                // verify the connect call
-                if ($definition->getMethodCalls() !== [['connect', ['127.0.0.1', 6379]]]) {
-                    return false;
-                }
-                return true;
-            }));
-        $this->definitionMock->expects($this->at(1))
-            ->method('addMethodCall')
-            ->with('setMaster', $this->callback(function ($subject) {
-                // verify the subject is an array of 1 Defintion class
-                if (count($subject) <> 1 && !is_a($subject[0], 'Symfony\Component\DependencyInjection\Definition')) {
-                    return false;
-                }
-                /** @var $definition \Symfony\Component\DependencyInjection\Definition */
-                $definition = $subject[0];
-                // verify the connect call
-                if ($definition->getMethodCalls() !== [['connect', ['localhost', 6380]]]) {
-                    return false;
-                }
-                return true;
-            }));
+            ->withConsecutive(
+                ['addRead', [new Definition('Redis'), '127.0.0.1', 1234, 1]],
+                ['setWrite', [new Definition('Redis'), 'localhost', 12345, 0.0]]
+            );
 
         $compiler = new RedisCompiler();
         $compiler->process($this->containerMock);

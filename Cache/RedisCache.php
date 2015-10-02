@@ -3,6 +3,7 @@
 namespace Igniter\ElastiCacheBundle\Cache;
 
 use Doctrine\Common\Cache\Cache;
+use Psr\Log\LoggerInterface;
 use Redis;
 
 /**
@@ -12,44 +13,55 @@ use Redis;
  */
 class RedisCache extends \Doctrine\Common\Cache\RedisCache
 {
-    /** @var \Redis */
-    private $master;
-    /** @var array of \Redis */
-    private $slaves = [];
+    /** @var array Host, port and timeout for connecting to Redis write server. */
+    private $writeConfig = [];
+    /** @var array[] Host, port and timeout for connecting to Redis write server. */
+    private $readConfigs = [];
+    /** @var Redis */
+    private $write;
+    /** @var Redis */
+    private $read;
+    /** @var LoggerInterface */
+    private $logger;
 
     /**
-     * @param \Redis $redis
+     * @param LoggerInterface|null $logger
      */
-    public function setMaster(Redis $redis)
+    public function __construct(LoggerInterface $logger = null)
     {
-        $redis->setOption(Redis::OPT_SERIALIZER, $this->getSerializerValue());
-        $this->master = $redis;
+        $this->logger = $logger;
     }
 
     /**
-     * @param \Redis $redis
+     * @param Redis $redis
+     * @param $host
+     * @param $port
+     * @param float $timeout
      */
-    public function addSlave(Redis $redis)
+    public function addRead(Redis $redis, $host, $port, $timeout = 0.0)
     {
-        $redis->setOption(Redis::OPT_SERIALIZER, $this->getSerializerValue());
-        $this->slaves[] = $redis;
+        $this->readConfigs[] = [
+            'redis' => $redis,
+            'host' => $host,
+            'port' => $port,
+            'timeout' => $timeout,
+        ];
     }
 
     /**
-     * @return \Redis
+     * @param Redis $redis
+     * @param $host
+     * @param $port
+     * @param float $timeout
      */
-    public function getMaster()
+    public function setWrite(Redis $redis, $host, $port, $timeout = 0.0)
     {
-        return $this->master;
-    }
-
-    /**
-     * Retrieve a random slave from the list.
-     * @return \Redis
-     */
-    public function getSlave()
-    {
-        return $this->slaves[array_rand($this->slaves)];
+        $this->writeConfig = [
+            'redis' => $redis,
+            'host' => $host,
+            'port' => $port,
+            'timeout' => $timeout,
+        ];
     }
 
     /**
@@ -57,7 +69,7 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
      */
     protected function doFetch($id)
     {
-        return $this->getSlave()->get($id);
+        return $this->getRead()->get($id);
     }
 
     /**
@@ -65,7 +77,7 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
      */
     protected function doContains($id)
     {
-        return $this->getSlave()->exists($id);
+        return $this->getRead()->exists($id);
     }
 
     /**
@@ -74,10 +86,10 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
     protected function doSave($id, $data, $lifeTime = 0)
     {
         if ($lifeTime > 0) {
-            return $this->getMaster()->setex($id, $lifeTime, $data);
+            return $this->getWrite()->setex($id, $lifeTime, $data);
         }
 
-        return $this->getMaster()->set($id, $data);
+        return $this->getWrite()->set($id, $data);
     }
 
     /**
@@ -85,7 +97,7 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
      */
     protected function doDelete($id)
     {
-        return $this->getMaster()->delete($id) > 0;
+        return $this->getWrite()->delete($id) > 0;
     }
 
     /**
@@ -93,7 +105,7 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
      */
     protected function doFlush()
     {
-        return $this->getMaster()->flushDB();
+        return $this->getWrite()->flushDB();
     }
 
     /**
@@ -101,7 +113,7 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
      */
     protected function doGetStats()
     {
-        $info = $this->getMaster()->info();
+        $info = $this->getWrite()->info();
 
         return array(
             Cache::STATS_HITS => false,
@@ -110,5 +122,57 @@ class RedisCache extends \Doctrine\Common\Cache\RedisCache
             Cache::STATS_MEMORY_USAGE => $info['used_memory'],
             Cache::STATS_MEMORY_AVAILABLE => false
         );
+    }
+
+    /**
+     * Retrieve a random read replica from the list.
+     * @return \Redis
+     * @throws \RedisException
+     */
+    private function getRead()
+    {
+        if (!$this->read) {
+            shuffle($this->readConfigs);
+            foreach ($this->readConfigs as $config) {
+                /** @var \Redis $redis */
+                $redis = $config['redis'];
+                try {
+                    $redis->connect($config['host'], $config['port'], $config['timeout']);
+                    $redis->setOption(Redis::OPT_SERIALIZER, $this->getSerializerValue());
+                    $this->read = $redis;
+                    break;
+                }
+                catch (\RedisException $ex) {
+                    if ($this->logger) {
+                        $this->logger->warning('Failed to connect to a Redis read replica.', [
+                            'exception' => $ex,
+                            'host' => $config['host'],
+                            'port' => $config['port'],
+                        ]);
+                    }
+                }
+            }
+
+            // If we failed to connect to any read replicas, give up, and send back the last exception (if any)
+            if (!$this->read) {
+                throw new \RedisException('Failed to connect to any Redis read replicas.', 0, isset($ex) ? $ex : null);
+            }
+        }
+
+        return $this->read;
+    }
+
+    /**
+     * @return \Redis
+     */
+    private function getWrite()
+    {
+        if (!$this->write) {
+            $this->write = $this->writeConfig['redis'];
+            $this->write->connect($this->writeConfig['host'], $this->writeConfig['port'], $this->writeConfig['timeout']);
+            $this->write->setOption(Redis::OPT_SERIALIZER, $this->getSerializerValue());
+        }
+
+        return $this->write;
     }
 }
