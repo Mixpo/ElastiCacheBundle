@@ -4,7 +4,7 @@ ElastiCacheBundle
 An ElastiCache Bundle for Symfony. This could also be used for Redis Clusters that aren't in ElastiCache as well. To that end, we use typical "master" and "slave" nomenclature instead of ElastiCache's "primary" and "read" node names.
 
 [![Codeship Status for ShopIgniter/ElastiCacheBundle](https://codeship.io/projects/fba198c0-f3ed-0131-a47e-6a1bcd925291/status?branch=master)](https://codeship.io/projects/27992)
-[![Coverage Status](https://img.shields.io/coveralls/ShopIgniter/ElastiCacheBundle.svg)](https://coveralls.io/r/ShopIgniter/ElastiCacheBundle)
+[![Coverage Status](https://coveralls.io/repos/Mixpo/ElastiCacheBundle/badge.svg?branch=master&service=github)](https://coveralls.io/github/Mixpo/ElastiCacheBundle?branch=master)
 
 ## Installation
 
@@ -13,9 +13,9 @@ To enable the RedisCache service, add your servers to your parameters.yml.
 parameters:
     # ...
     cache.redis.servers:
-        - { host: primary-write.ng.amazonaws.example.com, port: 6379, master: true }
-        - { host: primary-read.amazonaws.example.com, port: 6379 }
-        - { host: read-1.amazonaws.example.com, port: 6379 }
+        - { host: primary-write.ng.amazonaws.example.com, port: 6379, master: true, timeout: 5 }
+        - { host: primary-read.amazonaws.example.com, port: 6379, timeout: 5 }
+        - { host: read-1.amazonaws.example.com, port: 6379, timeout: 5 }
 ```
 
 ### Notes

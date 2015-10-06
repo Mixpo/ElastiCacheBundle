@@ -5,3 +5,4 @@ parameters:
 services:
     igniter.elasticache.rediscache:
         class: "%igniter.elasticache.rediscache.class%"
+        arguments: [@?logger]
