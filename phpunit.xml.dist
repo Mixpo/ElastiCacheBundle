@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<phpunit
-    bootstrap="./Tests/bootstrap.php"
-    colors="false"
-    stopOnFailure="false">
+<phpunit backupGlobals="false"
+         backupStaticAttributes="false"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         bootstrap="./vendor/autoload.php"
+>
 
     <testsuites>
         <testsuite name="ElastiCacheBundle Test Suite">

@@ -36,14 +36,12 @@ class RedisCompiler implements CompilerPassInterface
         foreach ($servers as $server) {
             // Create a definition for each Redis object
             $redis_definition = new Definition($redis_classname);
-            // Tell it to connect when used
-            $redis_definition->addMethodCall('connect', [$server['host'], $server['port']]);
 
             // Add to the RedisCache provider
             if (isset($server['master']) && $server['master']) {
-                $definition->addMethodCall('setMaster', [$redis_definition]);
+                $definition->addMethodCall('setWrite', [$redis_definition, $server['host'], $server['port'], isset($server['timeout']) ? $server['timeout'] : 0.0]);
             } else {
-                $definition->addMethodCall('addSlave', [$redis_definition]);
+                $definition->addMethodCall('addRead', [$redis_definition, $server['host'], $server['port'], isset($server['timeout']) ? $server['timeout'] : 0.0]);
             }
         }
     }
